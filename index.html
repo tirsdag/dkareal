@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landskabstransformation i Danmark</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            margin-bottom: 20px;
+        }
+        #map {
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .info-box {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .date-selector {
+            margin: 20px 0;
+        }
+        .results {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .football-pitch-container {
+            width: 600px;  
+            height: 300px;
+            margin: 20px auto;
+            position: relative;
+            background: #f0f0f0;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        .football-pitch {
+            width: 580px;  
+            height: 280px;
+            background: #e0e0e0;
+            border: 2px solid #45a049;
+            position: relative;
+            margin: 0 auto;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .pitch-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0%;  
+            height: 100%;  
+            background: linear-gradient(to right, #4CAF50, #45a049);  
+            transition: width 0.3s linear;
+            z-index: 1;
+        }
+
+        /* Rotated field markings */
+        .halfway-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            height: 100%;
+            background: white;
+            z-index: 2;
+        }
+
+        .center-circle {
+            width: 91px;  
+            height: 91px;
+        }
+
+        .penalty-area {
+            position: absolute;
+            width: 165px;  
+            height: 200px;
+            border: 2px solid white;
+            z-index: 2;
+        }
+
+        .penalty-area.top {
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        .penalty-area.bottom {
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+        }
+
+        .goal-area {
+            position: absolute;
+            width: 75px;  
+            height: 120px;
+            border: 2px solid white;
+            z-index: 2;
+        }
+
+        .goal-area.top {
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        .goal-area.bottom {
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+        }
+
+        .penalty-spot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+        }
+
+        .penalty-spot.top {
+            left: 110px;  
+        }
+
+        .penalty-spot.bottom {
+            right: 110px;
+        }
+
+        /* Mini pitches display */
+        .mini-pitches-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 10px;
+            justify-content: flex-start;
+            max-width: 800px;
+            margin: 0 auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .mini-pitch {
+            width: 52px;  
+            height: 34px;
+            background: #4CAF50;
+            border: 1px solid white;
+            position: relative;
+        }
+
+        .mini-pitch::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(255, 255, 255, 0.7);
+        }
+        
+        .current-progress {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 16px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Arealomlægning i danmark 2024-2045</h1>
+        
+        <div class="date-selector">
+            <label for="dateSelect">Vælg dato: </label>
+            <input type="date" id="dateSelect" min="2024-11-18" max="2045-12-31">
+        </div>
+
+        <div class="chart-container">
+            <canvas id="transformationChart"></canvas>
+        </div>
+
+        <div class="results" id="results">
+        </div>
+
+        <div id="map"></div>
+
+        <div class="info-box">
+            <h2>Transformation Progress</h2>
+            <div class="football-pitch-container" id="pitchContainer">
+                <!-- Football pitches will be added here dynamically -->
+            </div>
+            <p>Each football pitch represents 0.7 hectares</p>
+            <p id="footballPitchCount">Number of football pitches: 0</p>
+        </div>
+        
+        <div class="info-box">
+            <h2 id="dynamicHeading">Idag er kl 23:40 udtaget areal svarende til 0 fodbold baner ud af de 75 der skal udtages hver dag</h2>
+            <div class="football-pitch-container">
+                <div class="football-pitch">
+                    <div class="pitch-fill" id="pitchFill"></div>
+                    <div class="halfway-line"></div>
+                    <div class="center-circle"></div>
+                    <div class="center-dot"></div>
+                    <div class="penalty-area top"></div>
+                    <div class="penalty-area bottom"></div>
+                    <div class="goal-area top"></div>
+                    <div class="goal-area bottom"></div>
+                    <div class="penalty-spot top"></div>
+                    <div class="penalty-spot bottom"></div>
+                </div>
+                <div id="currentPitchProgress" class="current-progress"></div>
+            </div>
+            <p id="hectaresTransformedToday"></p>
+            <p id="dailyFootballPitchCount"></p>
+            <div id="miniPitchesContainer" class="mini-pitches-container">
+                <!-- Mini pitches will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Konstanter og hjælpefunktioner
+        const startDate = new Date('2024-11-18T00:00:00+01:00');
+        const endDate = new Date('2044-12-31T23:59:59+01:00');
+        const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+        const maxForestArea = 250000;
+        const maxLowlandArea = 140000;
+
+        // Define valid land regions in Denmark (avoiding water)
+        const landRegions = [
+            // Jutland (Jylland) regions
+            {
+                name: 'Northern Jutland',
+                centerLat: 57.0,
+                centerLng: 9.9,
+                radius: 0.3
+            },
+            {
+                name: 'Central Jutland',
+                centerLat: 56.2,
+                centerLng: 9.5,
+                radius: 0.4
+            },
+            {
+                name: 'Southern Jutland',
+                centerLat: 55.5,
+                centerLng: 9.2,
+                radius: 0.3
+            },
+            // Funen (Fyn)
+            {
+                name: 'Funen',
+                centerLat: 55.3,
+                centerLng: 10.3,
+                radius: 0.2
+            },
+            // Zealand (Sjælland) regions
+            {
+                name: 'Western Zealand',
+                centerLat: 55.5,
+                centerLng: 11.5,
+                radius: 0.3
+            },
+            {
+                name: 'Eastern Zealand',
+                centerLat: 55.7,
+                centerLng: 12.1,
+                radius: 0.25
+            }
+        ];
+
+        // Function to get a random point within a region
+        function getRandomLocationInRegion(region) {
+            const angle = Math.random() * 2 * Math.PI;
+            const r = Math.random() * region.radius;
+            return {
+                lat: region.centerLat + r * Math.cos(angle),
+                lng: region.centerLng + r * Math.sin(angle)
+            };
+        }
+
+        // Function to get three nearby points in the same region
+        function getThreeLocationsInDenmark() {
+            // Select a random region that can fit all three polygons
+            const region = landRegions[Math.floor(Math.random() * landRegions.length)];
+            
+            // Get base location within the region
+            const baseLocation = getRandomLocationInRegion(region);
+            
+            return {
+                baseLat: baseLocation.lat,
+                baseLng: baseLocation.lng,
+                regionName: region.name
+            };
+        }
+
+        // Beregn areal baseret på dato
+        function calculateArea(date) {
+            const daysPassed = (new Date(date) - startDate) / (1000 * 60 * 60 * 24);
+            const progress = Math.max(0, Math.min(1, daysPassed / totalDays));
+            return {
+                forest: Math.round(maxForestArea * progress),
+                lowland: Math.round(maxLowlandArea * progress)
+            };
+        }
+
+        // Calculate forest components based on total forest area
+        function calculateForestComponents(forestArea) {
+            const totalPlannedForest = 250000;
+            const ratio = forestArea / totalPlannedForest;
+            
+            return {
+                privateForest: 230000 * ratio,
+                publicForest: 20000 * ratio,
+                untouchedForest: 92000 * ratio,  // 40% of private forest
+                productionForest: 138000 * ratio, // 60% of private forest
+            };
+        }
+
+        // Define Danish islands and their sizes (sorted by area)
+        const danishIslands = [
+            { name: 'Sjælland', area: 704927 }, // 7049.27 km² × 100
+            { name: 'Nørrejyske Ø', area: 467424 }, // 4674.24 km² × 100
+            { name: 'Fyn', area: 298862 }, // 2988.62 km² × 100
+            { name: 'Lolland', area: 124497 }, // 1244.97 km² × 100
+            { name: 'Bornholm', area: 58932 }, // 589.32 km² × 100
+            { name: 'Falster', area: 51399 }, // 513.99 km² × 100
+            { name: 'Mors', area: 36046 }, // 360.46 km² × 100
+            { name: 'Als', area: 31131 }, // 311.31 km² × 100
+            { name: 'Langeland', area: 28354 }, // 283.54 km² × 100
+            { name: 'Møn', area: 21831 }, // 218.31 km² × 100
+            { name: 'Læsø', area: 11286 }, // 112.86 km² × 100
+            { name: 'Samsø', area: 11226 }, // 112.26 km² × 100
+            { name: 'Amager', area: 9628 }, // 96.28 km² × 100
+            { name: 'Ærø', area: 8751 }, // 87.51 km² × 100
+            { name: 'Rømø', area: 8656 }, // 86.56 km² × 100
+            { name: 'Tåsinge', area: 6999 }, // 69.99 km² × 100
+            { name: 'Fanø', area: 5960 }, // 59.60 km² × 100
+            { name: 'Fur', area: 2195 }, // 21.95 km² × 100
+            { name: 'Anholt', area: 2175 }, // 21.75 km² × 100
+            { name: 'Fejø', area: 1704 }, // 17.04 km² × 100
+            { name: 'Saltholm', area: 1672 }, // 16.72 km² × 100
+            { name: 'Orø', area: 1503 }, // 15.03 km² × 100
+            { name: 'Bogø', area: 1440 }, // 14.40 km² × 100
+            { name: 'Endelave', area: 1323 }, // 13.23 km² × 100
+            { name: 'Sejerø', area: 1250 }, // 12.50 km² × 100
+            { name: 'Femø', area: 1104 }, // 11.04 km² × 100
+            { name: 'Mandø', area: 854 }, // 8.54 km² × 100
+            { name: 'Agersø', area: 808 }, // 8.08 km² × 100
+            { name: 'Jegindø', area: 777 }, // 7.77 km² × 100
+            { name: 'Alrø', area: 770 } // 7.70 km² × 100
+        ].map(island => ({
+            ...island,
+        })).sort((a, b) => b.area - a.area); // Ensure sorted by area
+
+        // Find the closest island by area
+        function findClosestIsland(targetArea) {
+            let closestIsland = danishIslands[0];
+            let smallestDiff = Math.abs(targetArea - danishIslands[0].area);
+            
+            for (const island of danishIslands) {
+                const diff = Math.abs(targetArea - island.area);
+                if (diff < smallestDiff) {
+                    smallestDiff = diff;
+                    closestIsland = island;
+                }
+            }
+            
+            const percentDiff = ((targetArea - closestIsland.area) / closestIsland.area * 100).toFixed(1);
+            const isLarger = targetArea > closestIsland.area;
+            
+            return {
+                island: closestIsland,
+                percentDiff: percentDiff,
+                isLarger: isLarger
+            };
+        }
+
+        // Update info boxes with forest components
+        function updateInfoBoxes(forestArea, lowlandArea) {
+            const total = forestArea + lowlandArea;
+            const forestComponents = calculateForestComponents(forestArea);
+            
+            // Update main results box with forest distribution
+            const resultsHtml = `
+                <h3>Areal på valgt dato:</h3>
+                <p>Skov: <span id="forestArea">${Math.round(forestArea).toLocaleString()}</span> hektar</p>
+                <div class="forest-distribution">
+                    <h4>Skovfordeling:</h4>
+                    <ul>
+                        <li>Privat skov: ${Math.round(forestComponents.privateForest).toLocaleString()} hektar
+                            <ul>
+                                <li>Urørt skov (40%): ${Math.round(forestComponents.untouchedForest).toLocaleString()} hektar</li>
+                                <li>Produktionsskov (60%): ${Math.round(forestComponents.productionForest).toLocaleString()} hektar</li>
+                            </ul>
+                        </li>
+                        <li>Offentlig bynær skov: ${Math.round(forestComponents.publicForest).toLocaleString()} hektar</li>
+                    </ul>
+                </div>
+                <p>Lavbundsjorde: <span id="lowlandArea">${Math.round(lowlandArea).toLocaleString()}</span> hektar</p>
+                <p>Total: <span id="totalArea">${Math.round(total).toLocaleString()}</span> hektar</p>`;
+            
+            document.getElementById('results').innerHTML = resultsHtml;
+            
+            // Find closest island for comparison
+            const comparison = findClosestIsland(total);
+            const sizeDescription = comparison.isLarger ? 'større' : 'mindre';
+            
+            // Create two columns for the island list
+            const midPoint = Math.ceil(danishIslands.length / 2);
+            const column1 = danishIslands.slice(0, midPoint);
+            const column2 = danishIslands.slice(midPoint);
+            
+            // Update info box with island comparison
+            const infoHtml = `
+                <h3>Sammenligning med danske øer</h3>
+                <p>Det transformerede område på ${Math.round(total).toLocaleString()} hektar svarer næsten til ${comparison.island.name}s størrelse.</p>
+                <p>Området er ${Math.abs(comparison.percentDiff)}% ${sizeDescription} end ${comparison.island.name} (${comparison.island.area.toLocaleString()} hektar).</p>
+                <h4>Danmarks 30 største øer:</h4>
+                <div style="display: flex; justify-content: space-between;">
+                    <div style="width: 48%;">
+                        <ol>
+                            ${column1.map(island => 
+                                `<li>${island.name}: ${island.area.toLocaleString()} hektar</li>`
+                            ).join('')}
+                        </ol>
+                    </div>
+                    <div style="width: 48%;">
+                        <ol start="${midPoint + 1}">
+                            ${column2.map(island => 
+                                `<li>${island.name}: ${island.area.toLocaleString()} hektar</li>`
+                            ).join('')}
+                        </ol>
+                    </div>
+                </div>`;
+            
+            document.querySelector('.info-box').innerHTML = infoHtml;
+        }
+
+        // Global variables for map elements
+        let selectedLocation = { lat: 56.5, lng: 10.5 }; // Default location
+        let forestPolygon = null;
+        let lowlandPolygon = null;
+        let totalPolygon = null;
+
+        // Opret polygoner for skov og lavbundsjorde
+        function createAreaPolygons(forestArea, lowlandArea) {
+            const total = forestArea + lowlandArea;
+            
+            // Convert hectares to square kilometers
+            const forestAreaInSqKm = forestArea / 100;
+            const lowlandAreaInSqKm = lowlandArea / 100;
+            const totalAreaInSqKm = total / 100;
+            
+            // Calculate radii in kilometers
+            const forestRadiusInKm = Math.sqrt(forestAreaInSqKm / Math.PI);
+            const lowlandRadiusInKm = Math.sqrt(lowlandAreaInSqKm / Math.PI);
+            const totalRadiusInKm = Math.sqrt(totalAreaInSqKm / Math.PI);
+            
+            // Convert to approximate degrees
+            const latitudeCorrectionFactor = Math.cos(selectedLocation.lat * Math.PI / 180);
+            const forestRadiusLat = forestRadiusInKm / 111;
+            const forestRadiusLng = forestRadiusInKm / (111 * latitudeCorrectionFactor);
+            const lowlandRadiusLat = lowlandRadiusInKm / 111;
+            const lowlandRadiusLng = lowlandRadiusInKm / (111 * latitudeCorrectionFactor);
+            const totalRadiusLat = totalRadiusInKm / 111;
+            const totalRadiusLng = totalRadiusInKm / (111 * latitudeCorrectionFactor);
+
+            // Calculate offsets to position polygons side by side
+            const maxRadius = Math.max(forestRadiusLat, lowlandRadiusLat, totalRadiusLat);
+            const spacing = maxRadius * 2.5;
+
+            // Generate points for each polygon
+            const numPoints = 32;
+            
+            // Forest polygon points (leftmost)
+            const forestPoints = [];
+            const forestCenterLat = selectedLocation.lat;
+            const forestCenterLng = selectedLocation.lng - spacing;
+            for (let i = 0; i < numPoints; i++) {
+                const angle = (i * 2 * Math.PI) / numPoints;
+                const lat = forestCenterLat + Math.cos(angle) * forestRadiusLat;
+                const lng = forestCenterLng + Math.sin(angle) * forestRadiusLng;
+                forestPoints.push([lat, lng]);
+            }
+            forestPoints.push(forestPoints[0]);
+
+            // Lavbundsjorde polygon points (middle)
+            const lowlandPoints = [];
+            const lowlandCenterLat = selectedLocation.lat;
+            const lowlandCenterLng = selectedLocation.lng;
+            for (let i = 0; i < numPoints; i++) {
+                const angle = (i * 2 * Math.PI) / numPoints;
+                const lat = lowlandCenterLat + Math.cos(angle) * lowlandRadiusLat;
+                const lng = lowlandCenterLng + Math.sin(angle) * lowlandRadiusLng;
+                lowlandPoints.push([lat, lng]);
+            }
+            lowlandPoints.push(lowlandPoints[0]);
+
+            // Total area polygon points (rightmost)
+            const totalPoints = [];
+            const totalCenterLat = selectedLocation.lat;
+            const totalCenterLng = selectedLocation.lng + spacing;
+            for (let i = 0; i < numPoints; i++) {
+                const angle = (i * 2 * Math.PI) / numPoints;
+                const lat = totalCenterLat + Math.cos(angle) * totalRadiusLat;
+                const lng = totalCenterLng + Math.sin(angle) * totalRadiusLng;
+                totalPoints.push([lat, lng]);
+            }
+            totalPoints.push(totalPoints[0]);
+
+            // Remove existing polygons if they exist
+            if (forestPolygon) map.removeLayer(forestPolygon);
+            if (lowlandPolygon) map.removeLayer(lowlandPolygon);
+            if (totalPolygon) map.removeLayer(totalPolygon);
+
+            // Add forest polygon
+            forestPolygon = L.polygon(forestPoints, {
+                color: 'rgb(75, 192, 192)',
+                fillColor: 'rgb(75, 192, 192)',
+                fillOpacity: 0.6,
+                weight: 2
+            }).addTo(map);
+
+            // Add lavbundsjorde polygon
+            lowlandPolygon = L.polygon(lowlandPoints, {
+                color: 'rgb(255, 159, 64)',
+                fillColor: 'rgb(255, 159, 64)',
+                fillOpacity: 0.6,
+                weight: 2
+            }).addTo(map);
+
+            // Add total area polygon
+            totalPolygon = L.polygon(totalPoints, {
+                color: 'rgb(128, 128, 128)',
+                fillColor: 'rgb(128, 128, 128)',
+                fillOpacity: 0.6,
+                weight: 2
+            }).addTo(map);
+
+            // Add popups with region information
+            forestPolygon.bindPopup(`Skovareal: ${Math.round(forestArea).toLocaleString()} hektar`);
+            lowlandPolygon.bindPopup(`Lavbundsjorde: ${Math.round(lowlandArea).toLocaleString()} hektar`);
+            totalPolygon.bindPopup(`Samlet areal: ${Math.round(total).toLocaleString()} hektar`);
+
+            // Add click event to polygons to allow dragging
+            forestPolygon.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                selectedLocation = e.latlng;
+                createAreaPolygons(forestArea, lowlandArea);
+            });
+            
+            lowlandPolygon.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                selectedLocation = e.latlng;
+                createAreaPolygons(forestArea, lowlandArea);
+            });
+            
+            totalPolygon.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                selectedLocation = e.latlng;
+                createAreaPolygons(forestArea, lowlandArea);
+            });
+        }
+
+        // Generer datapunkter
+        function generateDataPoints() {
+            const points = [];
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+                points.push({
+                    x: currentDate.toISOString(),
+                    y: calculateArea(currentDate).forest
+                });
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+            return points;
+        }
+
+        function generateLowlandDataPoints() {
+            const points = [];
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+                points.push({
+                    x: currentDate.toISOString(),
+                    y: calculateArea(currentDate).lowland
+                });
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+            return points;
+        }
+
+        // Initialiser kort
+        const map = L.map('map').setView([56.5, 10.5], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: ' OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Handle map clicks
+        map.on('click', function(e) {
+            selectedLocation = e.latlng;
+            const areas = calculateArea(dateSelect.value);
+            createAreaPolygons(areas.forest, areas.lowland);
+        });
+
+        // Set default date and update display
+        const dateSelect = document.getElementById('dateSelect');
+        dateSelect.value = new Date().toISOString().split('T')[0];
+        const initialAreas = calculateArea(new Date());
+        updateInfoBoxes(initialAreas.forest, initialAreas.lowland);
+        createAreaPolygons(initialAreas.forest, initialAreas.lowland);
+
+        // Håndter datovælger
+        dateSelect.addEventListener('change', function(e) {
+            const areas = calculateArea(e.target.value);
+            updateInfoBoxes(areas.forest, areas.lowland);
+            createAreaPolygons(areas.forest, areas.lowland);
+        });
+
+        // Initialiser graf
+        const ctx = document.getElementById('transformationChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Skov',
+                    borderColor: 'rgb(75, 192, 192)',
+                    data: generateDataPoints(),
+                    tension: 0.4
+                }, {
+                    label: 'Lavbundsjorde',
+                    borderColor: 'rgb(255, 159, 64)',
+                    data: generateLowlandDataPoints(),
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'month',
+                            displayFormats: {
+                                month: 'MMM yyyy'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Dato'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Hektar'
+                        }
+                    }
+                }
+            }
+        });
+
+        function getCurrentTime() {
+            // Get current time in Denmark
+            const now = new Date();
+            // Ensure we're using Danish timezone
+            return new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Copenhagen' }));
+        }
+
+        function getProgressForToday() {
+            const now = getCurrentTime();
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0, 0, 0, 0);
+            
+            // Calculate total project days
+            const projectStart = new Date('2024-11-18T00:00:00+01:00');
+            const projectEnd = new Date('2044-12-31T23:59:59+01:00');
+            const totalProjectDays = Math.ceil((projectEnd - projectStart) / (1000 * 60 * 60 * 24));
+            
+            // Calculate daily rate
+            const totalHectares = 390000;
+            const hectaresPerDay = totalHectares / totalProjectDays;
+            
+            // Calculate progress for current time
+            const elapsedMs = now - startOfDay;
+            const totalMsInDay = 24 * 60 * 60 * 1000;
+            const dayProgress = elapsedMs / totalMsInDay;
+            
+            // Calculate hectares transformed so far today
+            const hectaresToday = hectaresPerDay * dayProgress;
+            
+            // Calculate football pitches (0.7 hectares each)
+            const completePitches = Math.floor(hectaresToday / 0.7);
+            
+            // Calculate progress of current pitch
+            const remainingHectares = hectaresToday % 0.7;
+            const currentPitchProgress = (remainingHectares / 0.7) * 100;
+            
+            return {
+                hectaresToday,
+                hectaresPerDay,
+                completePitches,
+                currentPitchProgress,
+                currentTime: now
+            };
+        }
+
+        function updateFootballPitches() {
+            const progress = getProgressForToday();
+            
+            // Format numbers using Danish locale
+            const formatNumber = (num) => num.toLocaleString('da-DK', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            });
+            
+            // Format time using Danish locale
+            const formatTime = (date) => date.toLocaleTimeString('da-DK', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: 'Europe/Copenhagen'
+            }).replace(/:/g, '.');  // Replace colons with dots for Danish time format
+            
+            // Update text displays
+            document.getElementById('hectaresTransformedToday').textContent = 
+                `Hektar transformeret i dag (${formatTime(progress.currentTime)}): ${formatNumber(progress.hectaresToday)} af ${formatNumber(progress.hectaresPerDay)} hektar/dag`;
+            
+            document.getElementById('dailyFootballPitchCount').textContent = 
+                `Fodboldbaner transformeret: ${progress.completePitches}`;
+            
+            document.getElementById('currentPitchProgress').textContent = 
+                `Nuværende bane: ${Math.round(progress.currentPitchProgress)}%`;
+            
+            // Update the fill animation
+            const fillElement = document.getElementById('pitchFill');
+            if (fillElement) {
+                fillElement.style.width = `${progress.currentPitchProgress}%`;
+            }
+
+            // Update mini pitches display
+            const container = document.getElementById('miniPitchesContainer');
+            container.innerHTML = ''; // Clear existing mini pitches
+            
+            // Add mini pitches for all completed pitches
+            for (let i = 0; i < progress.completePitches; i++) {
+                const miniPitch = document.createElement('div');
+                miniPitch.className = 'mini-pitch';
+                container.appendChild(miniPitch);
+            }
+            
+            // Update dynamic heading
+            const timeStr = formatTime(progress.currentTime);
+            document.getElementById('dynamicHeading').textContent = 
+                `Idag kl ${timeStr} skulle der være udtaget areal svarende til ${progress.completePitches} fodbold baner ud af de 75 der skal udtages hver dag indtil 2045`;
+        }
+        
+        // Update every 100ms for smooth animation
+        setInterval(updateFootballPitches, 100);
+        
+        // Initial update
+        updateFootballPitches();
+
+        // Add this to your existing date change handler
+        dateSelect.addEventListener('change', function() {
+            updateTransformedArea();
+            updateFootballPitches();
+        });
+
+        function updateTransformedArea() {
+            const transformedArea = calculateArea(dateSelect.value).forest + calculateArea(dateSelect.value).lowland;
+            document.getElementById('footballPitchCount').textContent = `Fodboldbaner transformeret: ${Math.floor(transformedArea / 0.7).toLocaleString()}`;
+            
+            // Clear existing pitches
+            const container = document.getElementById('pitchContainer');
+            container.innerHTML = '';
+            
+            // Calculate how many pitches to show (max 15 for visualization)
+            const maxVisiblePitches = 15;
+            const pitchesToShow = Math.min(Math.floor(transformedArea / 0.7), maxVisiblePitches);
+            
+            // Add new pitches with staggered animation
+            for (let i = 0; i < pitchesToShow; i++) {
+                const pitch = document.createElement('div');
+                pitch.className = 'football-pitch';
+                
+                // Position pitches in a grid
+                const row = Math.floor(i / 5);
+                const col = i % 5;
+                pitch.style.left = (col * 45) + 'px';
+                pitch.style.top = (row * 65) + 'px';
+                
+                // Add staggered animation
+                pitch.style.animation = `pitchAppear 0.5s ease-out ${i * 0.1}s forwards`;
+                
+                container.appendChild(pitch);
+            }
+        }
+    </script>
+</body>
+</html>
